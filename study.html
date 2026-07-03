@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Hours - Schedule Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="study-page">
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-brand" href="index.html">&#128197; Schedule Tracker</a>
+    <div class="nav-links">
+      <a href="study.html" class="active-study">&#128218; Study</a>
+      <a href="sleep.html">&#128564; Sleep</a>
+    </div>
+    <div class="nav-student" id="navStudent">
+      Hello, <span id="navName">&mdash;</span>
+      <button class="btn-change-name" onclick="window.location.href='index.html'">Change</button>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div class="badge badge-study">&#128218; Study Tracker</div>
+      <h2>Daily Study Hours</h2>
+      <p id="subHeading">Click any day on the calendar to log your study hours.</p>
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="summary-label">Days Logged</div>
+        <div class="summary-value value-study" id="statEntries">0</div>
+        <div class="summary-unit">entries</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Daily Average</div>
+        <div class="summary-value value-study" id="statAvg">&mdash;</div>
+        <div class="summary-unit">hours / day</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Latest Entry</div>
+        <div class="summary-value value-study" id="statLatest">&mdash;</div>
+        <div class="summary-unit">hours</div>
+      </div>
+    </div>
+
+    <!-- MONTH NAVIGATION -->
+    <div class="month-nav">
+      <button class="btn-month" onclick="changeMonth(-1)">&#8249;</button>
+      <span class="month-label" id="monthLabel"></span>
+      <button class="btn-month" onclick="changeMonth(1)">&#8250;</button>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="calendar-wrapper">
+      <div class="cal-day-headers">
+        <div class="cal-day-header">Sun</div>
+        <div class="cal-day-header">Mon</div>
+        <div class="cal-day-header">Tue</div>
+        <div class="cal-day-header">Wed</div>
+        <div class="cal-day-header">Thu</div>
+        <div class="cal-day-header">Fri</div>
+        <div class="cal-day-header">Sat</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="calendar-legend">
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:var(--study-light);border:1.5px solid var(--study-primary)"></div>
+        Hours logged
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:var(--study-primary);border-radius:50%"></div>
+        Today
+      </div>
+      <div class="legend-item" style="font-size:.78rem">
+        Click a day to log or edit
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <!-- ENTRY MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOnBg(event)">
+    <div class="modal-card">
+      <div class="modal-date-label" id="modalDateLabel"></div>
+      <div class="modal-title" id="modalTitle">Log Study Hours</div>
+      <div class="form-group">
+        <label for="modalHours">Hours Studied</label>
+        <input type="number" id="modalHours" min="0" max="24" step="0.5" placeholder="e.g. 3.5" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-modal-delete" id="btnDel" onclick="modalDelete()" style="display:none">Delete</button>
+        <button class="btn-modal-save btn-modal-save-study" onclick="modalSave()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js?v=20260703-4"></script>
+  <script>
+    const TYPE = 'study';
+    let curYear  = new Date().getFullYear();
+    let curMonth = new Date().getMonth();
+    let activeDate = null;
+
+    const MONTHS = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
+    ];
+
+    function pageInit() {
+      const name = guardName();
+      document.getElementById('subHeading').textContent =
+        'Hi ' + name + '! Click any day on the calendar to log your study hours.';
+      renderCalendar();
+      updateSummary();
+    }
+
+    function changeMonth(delta) {
+      curMonth += delta;
+      if (curMonth > 11) { curMonth = 0;  curYear++; }
+      if (curMonth < 0)  { curMonth = 11; curYear--; }
+      renderCalendar();
+    }
+
+    function isoDate(y, m, d) {
+      return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+
+    function renderCalendar() {
+      document.getElementById('monthLabel').textContent = MONTHS[curMonth] + ' ' + curYear;
+
+      const firstDOW  = new Date(curYear, curMonth, 1).getDay();
+      const totalDays = new Date(curYear, curMonth + 1, 0).getDate();
+      const name      = getStudentName();
+
+      const entryMap = {};
+      getEntries(TYPE)
+        .filter(e => e.student === name)
+        .forEach(e => { entryMap[e.date] = e; });
+
+      const todayStr = isoDate(
+        new Date().getFullYear(), new Date().getMonth(), new Date().getDate()
+      );
+
+      const grid = document.getElementById('calGrid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < firstDOW; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'day-cell day-blank';
+        grid.appendChild(blank);
+      }
+
+      for (let d = 1; d <= totalDays; d++) {
+        const ds    = isoDate(curYear, curMonth, d);
+        const entry = entryMap[ds] || null;
+
+        const cell = document.createElement('div');
+        cell.className = 'day-cell'
+          + (ds === todayStr ? ' day-today' : '')
+          + (entry           ? ' day-has-entry' : '');
+
+        cell.innerHTML =
+          '<span class="day-num">' + d + '</span>' +
+          (entry
+            ? '<span class="day-hours">' + entry.hours + 'h</span>'
+            : '<span class="day-add">+</span>');
+
+        cell.addEventListener('click', () => openModal(ds, entry));
+        grid.appendChild(cell);
+      }
+    }
+
+    function openModal(dateStr, entry) {
+      activeDate = dateStr;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      document.getElementById('modalDateLabel').textContent =
+        new Date(y, m - 1, d).toLocaleDateString(undefined, {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+      document.getElementById('modalTitle').textContent = entry ? 'Edit Study Hours' : 'Log Study Hours';
+      document.getElementById('modalHours').value       = entry ? entry.hours : '';
+      document.getElementById('btnDel').style.display   = entry ? 'inline-flex' : 'none';
+      document.getElementById('modalOverlay').classList.add('open');
+      requestAnimationFrame(() => document.getElementById('modalHours').focus());
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('open');
+      activeDate = null;
+    }
+
+    function closeModalOnBg(e) {
+      if (e.target === document.getElementById('modalOverlay')) closeModal();
+    }
+
+    function modalSave() {
+      const raw   = document.getElementById('modalHours').value;
+      const hours = parseFloat(raw);
+      if (raw === '' || isNaN(hours)) { showToast('Enter the hours studied.'); return; }
+      if (hours < 0 || hours > 24)   { showToast('Hours must be 0 - 24.');    return; }
+      saveEntry(TYPE, activeDate, hours);
+      closeModal();
+      renderCalendar();
+      updateSummary();
+      showToast('Study hours saved!');
+    }
+
+    function modalDelete() {
+      const entry = getEntries(TYPE).find(
+        e => e.student === getStudentName() && e.date === activeDate
+      );
+      if (entry) removeEntry(TYPE, entry.id);
+      closeModal();
+      renderCalendar();
+      updateSummary();
+      showToast('Entry deleted.');
+    }
+
+    function updateSummary() {
+      const entries = getEntries(TYPE).filter(e => e.student === getStudentName());
+      document.getElementById('statEntries').textContent = entries.length;
+      if (!entries.length) {
+        document.getElementById('statAvg').textContent    = '-';
+        document.getElementById('statLatest').textContent = '-';
+        return;
+      }
+      const total  = entries.reduce((s, e) => s + e.hours, 0);
+      const latest = [...entries].sort((a, b) => b.date.localeCompare(a.date))[0];
+      document.getElementById('statAvg').textContent    = (total / entries.length).toFixed(1);
+      document.getElementById('statLatest').textContent = latest.hours;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Enter' && document.getElementById('modalOverlay').classList.contains('open'))
+        modalSave();
+    });
+
+    pageInit();
+  </script>
+</body>
+</html>

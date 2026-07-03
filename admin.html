@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - Schedule Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="admin-page">
+
+  <nav>
+    <a class="nav-brand" href="index.html">📅 Schedule Tracker</a>
+    <div class="nav-links">
+      <a href="study.html">📚 Study</a>
+      <a href="sleep.html">😴 Sleep</a>
+      <a href="admin.html" class="active-admin">🔐 Admin</a>
+    </div>
+    <div class="nav-student" id="adminStatus">Admin Mode</div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <div class="badge badge-admin">🔐 Admin</div>
+      <h2>Class Schedule Dashboard</h2>
+      <p>View each student's study and sleep schedule from Google Sheet data.</p>
+    </div>
+
+    <div class="admin-auth-card" id="authCard">
+      <h3>Admin Login</h3>
+      <p>Enter the admin password to load data from Google Sheets.</p>
+      <div class="form-group">
+        <label for="webhookUrl">Apps Script Web App URL</label>
+        <input type="url" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+      </div>
+      <div class="form-actions" style="margin-top:10px">
+        <button class="btn-clear" type="button" onclick="saveWebhookUrl()">Save URL</button>
+      </div>
+      <div class="form-group">
+        <label for="adminPassword">Password</label>
+        <input type="password" id="adminPassword" placeholder="Enter password" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-submit btn-submit-admin" onclick="adminLogin()">Unlock Dashboard</button>
+      </div>
+      <p class="admin-hint">Tip: set your deployed Apps Script Web App URL above, then unlock dashboard.</p>
+    </div>
+
+    <div id="adminPanel" style="display:none">
+      <div class="admin-controls-card">
+        <div class="form-row admin-controls-row">
+          <div class="form-group">
+            <label for="studentSelect">Student</label>
+            <select id="studentSelect" class="admin-select" onchange="renderAdminView()"></select>
+          </div>
+          <div class="form-group">
+            <label>Data Source</label>
+            <input type="text" class="admin-readonly" id="sourceStatus" readonly value="Google Sheets" />
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-row">
+        <div class="summary-card">
+          <div class="summary-label">Days Logged</div>
+          <div class="summary-value value-admin" id="sumDays">0</div>
+          <div class="summary-unit">days</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Avg Study</div>
+          <div class="summary-value value-admin" id="sumStudy">-</div>
+          <div class="summary-unit">hours/day</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Avg Sleep</div>
+          <div class="summary-value value-admin" id="sumSleep">-</div>
+          <div class="summary-unit">hours/night</div>
+        </div>
+      </div>
+
+      <div class="month-nav">
+        <button class="btn-month" onclick="changeMonth(-1)">&#8249;</button>
+        <span class="month-label" id="monthLabel"></span>
+        <button class="btn-month" onclick="changeMonth(1)">&#8250;</button>
+      </div>
+
+      <div class="calendar-wrapper">
+        <div class="cal-day-headers">
+          <div class="cal-day-header">Sun</div>
+          <div class="cal-day-header">Mon</div>
+          <div class="cal-day-header">Tue</div>
+          <div class="cal-day-header">Wed</div>
+          <div class="cal-day-header">Thu</div>
+          <div class="cal-day-header">Fri</div>
+          <div class="cal-day-header">Sat</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+
+      <div class="calendar-legend">
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:var(--study-light);border:1.5px solid var(--study-primary)"></div>
+          Study hours
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:var(--sleep-light);border:1.5px solid var(--sleep-primary)"></div>
+          Sleep hours
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#fee2e2;border:1.5px solid var(--danger)"></div>
+          Sleep below 7 hours
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js?v=20260703-4"></script>
+  <script>
+    const ADMIN_PASSWORD = 'mason';
+    let curYear = new Date().getFullYear();
+    let curMonth = new Date().getMonth();
+    let adminRows = [];
+    let studentNames = [];
+
+    function initWebhookUrlField() {
+      document.getElementById('webhookUrl').value = getSheetsWebhookUrl();
+    }
+
+    function saveWebhookUrl() {
+      const input = document.getElementById('webhookUrl');
+      const value = input.value.trim();
+      if (!value) {
+        showToast('Please enter a Web App URL.');
+        return;
+      }
+      setSheetsWebhookUrl(value);
+      input.value = getSheetsWebhookUrl();
+      showToast('Web App URL saved.');
+    }
+
+    function adminLogin() {
+      const entered = document.getElementById('adminPassword').value;
+      if (entered !== ADMIN_PASSWORD) {
+        showToast('Wrong password.');
+        return;
+      }
+
+      fetchAdminDataFromSheet(entered)
+        .then((res) => {
+          adminRows = Array.isArray(res.rows) ? res.rows : [];
+          studentNames = Array.isArray(res.students) ? res.students : [];
+          if (!studentNames.length) {
+            showToast('No sheet data found yet.');
+          }
+          populateStudents();
+          document.getElementById('authCard').style.display = 'none';
+          document.getElementById('adminPanel').style.display = 'block';
+          renderAdminView();
+          showToast('Admin data loaded.');
+        })
+        .catch((err) => {
+          showToast(err.message || 'Failed to load admin data.');
+        });
+    }
+
+    function populateStudents() {
+      const select = document.getElementById('studentSelect');
+      if (!studentNames.length) {
+        select.innerHTML = '<option value="">No students found</option>';
+        return;
+      }
+      select.innerHTML = studentNames.map(name =>
+        '<option value="' + escHtml(name) + '">' + escHtml(name) + '</option>'
+      ).join('');
+    }
+
+    function changeMonth(delta) {
+      curMonth += delta;
+      if (curMonth > 11) { curMonth = 0; curYear++; }
+      if (curMonth < 0) { curMonth = 11; curYear--; }
+      renderAdminView();
+    }
+
+    function renderAdminView() {
+      const student = document.getElementById('studentSelect').value;
+      document.getElementById('monthLabel').textContent =
+        new Date(curYear, curMonth, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+      if (!student) {
+        document.getElementById('calGrid').innerHTML = '';
+        updateSummary([]);
+        return;
+      }
+
+      const map = {};
+      const rows = adminRows.filter(r => r.name === student);
+      rows.forEach(r => { map[r.date] = r; });
+
+      const first = new Date(curYear, curMonth, 1).getDay();
+      const total = new Date(curYear, curMonth + 1, 0).getDate();
+      const grid = document.getElementById('calGrid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < first; i++) {
+        const b = document.createElement('div');
+        b.className = 'day-cell day-blank';
+        grid.appendChild(b);
+      }
+
+      const monthRows = [];
+      for (let d = 1; d <= total; d++) {
+        const ds = curYear + '-' + String(curMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        const row = map[ds] || null;
+        if (row) monthRows.push(row);
+
+        const low = row && Number(row.sleepHours || 0) > 0 && Number(row.sleepHours) < 7;
+        const cell = document.createElement('div');
+        cell.className = 'day-cell admin-day-cell' + (low ? ' day-low-sleep' : '');
+
+        let html = '<span class="day-num">' + d + '</span>';
+        if (row) {
+          html += '<div class="admin-hours-wrap">';
+          html += '<span class="day-hours admin-study">S: ' + (row.studyHours === '' ? '-' : row.studyHours) + 'h</span>';
+          html += '<span class="day-hours admin-sleep">Z: ' + (row.sleepHours === '' ? '-' : row.sleepHours) + 'h</span>';
+          html += '</div>';
+        } else {
+          html += '<span class="day-add">-</span>';
+        }
+
+        cell.innerHTML = html;
+        grid.appendChild(cell);
+      }
+
+      updateSummary(monthRows);
+    }
+
+    function updateSummary(rows) {
+      const days = rows.length;
+      const studyVals = rows.map(r => Number(r.studyHours)).filter(v => Number.isFinite(v) && v >= 0);
+      const sleepVals = rows.map(r => Number(r.sleepHours)).filter(v => Number.isFinite(v) && v >= 0);
+
+      document.getElementById('sumDays').textContent = String(days);
+      document.getElementById('sumStudy').textContent =
+        studyVals.length ? (studyVals.reduce((a, b) => a + b, 0) / studyVals.length).toFixed(1) : '-';
+      document.getElementById('sumSleep').textContent =
+        sleepVals.length ? (sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length).toFixed(1) : '-';
+    }
+
+    document.getElementById('adminPassword').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') adminLogin();
+    });
+
+    initWebhookUrlField();
+  </script>
+</body>
+</html>

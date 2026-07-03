@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Schedule Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-brand" href="index.html">📅 Schedule Tracker</a>
+    <div class="nav-links">
+      <a href="study.html">📚 Study</a>
+      <a href="sleep.html">😴 Sleep</a>
+      <a href="admin.html">🔐 Admin</a>
+    </div>
+    <div class="nav-student" id="navStudent" style="display:none">
+      Hello, <span id="navName"></span>
+      <button class="btn-change-name" onclick="resetStudent()">Change</button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <main class="hero">
+    <div class="hero-icon">📅</div>
+    <h1>Student Schedule Tracker</h1>
+    <p>Track your daily study and sleep hours to build better habits.</p>
+
+    <!-- Student picker (default view) -->
+    <div id="studentPicker">
+      <p class="who-are-you">Who are you?</p>
+      <div class="students-grid" id="studentsGrid"></div>
+      <a href="admin.html" class="admin-entry-link">🔐 Open Admin</a>
+    </div>
+
+    <!-- Page chooser (shown after a student is selected) -->
+    <div id="pageChooser" style="display:none;flex-direction:column;align-items:center;gap:16px;width:min(480px,92vw)">
+      <h2 style="font-size:1.5rem;font-weight:800">Welcome back, <span id="greetName"></span>! 👋</h2>
+      <p style="color:var(--text-muted);font-size:.95rem">Choose a tracker to log today's hours.</p>
+      <div class="page-cards" style="width:100%">
+        <a href="study.html" class="page-card study">
+          <span class="card-icon">📚</span>
+          Study Hours
+        </a>
+        <a href="sleep.html" class="page-card sleep">
+          <span class="card-icon">😴</span>
+          Sleep Hours
+        </a>
+        <a href="admin.html" class="page-card admin">
+          <span class="card-icon">🔐</span>
+          Admin Dashboard
+        </a>
+      </div>
+      <button class="btn-switch" onclick="resetStudent()">Not you? Switch student</button>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js?v=20260703-4"></script>
+  <script>
+    const STUDENTS = [
+      { name: 'Jamie',      color: 0 },
+      { name: 'Casey',      color: 1 },
+      { name: 'Sharanya',   color: 2 },
+      { name: 'Alexandria', color: 3 },
+      { name: 'Angelica',   color: 4 },
+      { name: 'Ronald',     color: 5 },
+      { name: 'Jim',        color: 6 },
+      { name: 'Sean',       color: 0 },
+      { name: 'Alice',      color: 1 },
+      { name: 'Likhit',     color: 2 },
+      { name: 'Baladitya',  color: 3 },
+      { name: 'Yashita',    color: 4 },
+      { name: 'Eugiena',    color: 5 },
+      { name: 'JOHN MARK',  color: 6 },
+      { name: 'Dilreet',    color: 0 },
+      { name: 'Alina',      color: 1 },
+      { name: 'Rilie',      color: 2 },
+    ];
+
+    function buildGrid() {
+      document.getElementById('studentsGrid').innerHTML = STUDENTS.map(s => `
+        <button class="student-btn" onclick="selectStudent('${escHtml(s.name)}')">
+          <span class="student-avatar avatar-${s.color}">${s.name[0]}</span>
+          ${escHtml(s.name)}
+        </button>
+      `).join('');
+    }
+
+    function selectStudent(name) {
+      setStudentName(name);
+      document.getElementById('studentPicker').style.display  = 'none';
+      const pc = document.getElementById('pageChooser');
+      pc.style.display = 'flex';
+      document.getElementById('greetName').textContent = name;
+      showNavStudent(name);
+      showToast('Hi, ' + name + '! 👋');
+    }
+
+    function resetStudent() {
+      clearStudentName();
+      document.getElementById('pageChooser').style.display   = 'none';
+      document.getElementById('studentPicker').style.display = 'block';
+      document.getElementById('navStudent').style.display    = 'none';
+    }
+
+    function init() {
+      buildGrid();
+      const name = getStudentName();
+      if (name) {
+        document.getElementById('studentPicker').style.display = 'none';
+        document.getElementById('pageChooser').style.display   = 'flex';
+        document.getElementById('greetName').textContent = name;
+        showNavStudent(name);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
